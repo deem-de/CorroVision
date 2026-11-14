@@ -1,143 +1,195 @@
-"""CorroVision demo app.
+"""CorroVision - Streamlit interface (English / Arabic).
 
-Upload an image of a marine structure:
-  Stage 1 decides Healthy / Corroded, and if corroded,
-  Stage 2 names the corrosion type (one of eight).
-
-Model: frozen ImageNet ResNet50 + the two small heads trained in this project
-(test accuracy: Stage 1 99.56%, Stage 2 74.06%).
-
-Run:  python app.py            (then open the printed link)
-      python app.py --share    (also prints a public link; use this on Google Colab)
+Run from the repository root:   streamlit run app/app.py
 """
+import io
 import json
-import sys
 from pathlib import Path
 
-import cv2
-import gradio as gr
 import numpy as np
-from tensorflow import keras
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+from PIL import Image
 
-HERE = Path(__file__).resolve().parent
-IMG_SIZE = 224
-CLASSES = json.loads((HERE / 'models' / 'labels.json').read_text())['stage2_classes']
+from texts import T, TYPES
 
-# What each corrosion type means, shown under the prediction.
-ABOUT = {
-    'Crevice': 'Localised attack inside narrow gaps (under gaskets, washers, lap joints) where seawater stagnates.',
-    'Erosion': 'Metal loss sped up by fast or turbulent flow, often at bends, elbows and pump parts.',
-    'Galvanic': 'One metal corrodes faster because it touches a different, more noble metal in seawater.',
-    'MIC': 'Microbiologically influenced corrosion: bacteria and biofilms create aggressive local conditions.',
-    'Pitting': 'Small, deep holes in the surface. Hard to see and dangerous because they can perforate the wall.',
-    'Stress': 'Cracks that grow under tensile stress in a corrosive environment (stress corrosion cracking).',
-    'Under Insulation': 'Corrosion hidden under insulation or coatings where moisture has been trapped.',
-    'Uniform': 'Even metal loss over a large area. The most common and most predictable form.',
-}
+ROOT = Path(__file__).resolve().parent.parent
+RESULTS = ROOT / 'results'
+APP_MODEL = 'ResNet50 (frozen)'                       # row name of this app's model in the result tables
+TEAL, NAVY, RED, GREEN, GREY = '#0f8b8d', '#0b3954', '#c62828', '#2e7d32', '#9aa5b1'
 
-# ----------------------------------------------------------------------------- models (loaded once)
-backbone = keras.applications.ResNet50(weights='imagenet', include_top=False, pooling='avg',
-                                       input_shape=(IMG_SIZE, IMG_SIZE, 3))
-head1 = keras.models.load_model(HERE / 'models' / 'head_stage1.keras')
-head2 = keras.models.load_model(HERE / 'models' / 'head_stage2.keras')
+st.set_page_config(page_title='CorroVision', page_icon='⚓', layout='wide')
 
+# ----------------------------------------------------------------------------- sidebar
+with st.sidebar:
+    lang = 'ar' if st.radio(T['en']['lang'], ['English', 'العربية'], horizontal=True, key='lang') == 'العربية' else 'en'
+    t = T[lang]
+    st.markdown(f"### ⚙️ {t['settings']}")
+    threshold = st.slider(t['threshold'], 0.05, 0.95, 0.50, 0.05, help=t['threshold_help'], key='threshold')
+    use_tta = st.toggle(t['tta'], value=False, help=t['tta_help'], key='tta')
+    use_cam = st.toggle(t['cam'], value=True, key='cam')
+    st.markdown(f"**{t['model_title']}**")
+    st.caption(t['model_text'])
+    st.caption(t['disclaimer'])
 
-# ----------------------------------------------------------------------------- same preprocessing as training
-def preprocess(rgb):
-    """Resize -> bilateral filter -> Gray-World colour correction -> CLAHE (identical to the training pipeline)."""
-    x = cv2.resize(rgb, (IMG_SIZE, IMG_SIZE), interpolation=cv2.INTER_AREA)
-    x = cv2.bilateralFilter(x, 5, 20, 3)
-    f = x.astype(np.float32)
-    means = f.reshape(-1, 3).mean(axis=0) + 1e-6
-    x = np.clip(f * np.clip(means.mean() / means, 0.5, 3.0), 0, 255).astype(np.uint8)
-    lab = cv2.cvtColor(x, cv2.COLOR_RGB2LAB)
-    lab[..., 0] = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(lab[..., 0])
-    return cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
-
-
-def card(kind, title, line):
-    return f'<div class="verdict {kind}"><div class="v-title">{title}</div><div class="v-line">{line}</div></div>'
-
-
-def predict(image):
-    if image is None:
-        return card('idle', 'No image yet', 'Upload a photo of a structure, then press Inspect.'), None, None, ''
-    rgb = np.asarray(image.convert('RGB') if hasattr(image, 'convert') else image)[..., :3].astype(np.uint8)
-    proc = preprocess(rgb)
-    feat = backbone.predict_on_batch(keras.applications.resnet50.preprocess_input(proc[None].astype(np.float32)))
-    p_cor = float(head1.predict_on_batch(feat).reshape(-1)[0])
-    if p_cor < 0.5:                                         # Stage 1 says Healthy: the pipeline stops here
-        return (card('ok', 'Healthy', f'No corrosion detected &nbsp;·&nbsp; confidence {(1 - p_cor) * 100:.1f}%'),
-                None, proc, 'Stage 2 was skipped because Stage 1 classified the structure as healthy.')
-    p_type = head2.predict_on_batch(feat).reshape(-1)
-    top = CLASSES[int(p_type.argmax())]
-    return (card('bad', 'Corroded', f'Corrosion detected &nbsp;·&nbsp; confidence {p_cor * 100:.1f}%'),
-            {c: float(p) for c, p in zip(CLASSES, p_type)}, proc,
-            f'**Most likely type: {top} corrosion.** {ABOUT[top]}')
+rtl = lang == 'ar'
+st.markdown(f"""
+<style>
+.block-container {{padding-top: 3.6rem; max-width: 1180px;}}
+{'.stApp, .stMarkdown, .stCaption, [data-testid="stSidebar"] {direction: rtl; text-align: right;}' if rtl else ''}
+.hero {{background: linear-gradient(120deg, {NAVY} 0%, #0e6377 60%, {TEAL} 100%); border-radius: 14px;
+        padding: 22px 28px; color: #fff; margin-bottom: 14px;}}
+.hero h1 {{color: #fff; font-size: 1.9rem; margin: 0; padding: 0;}}
+.hero p {{color: #d6ecee; margin: 4px 0 0; font-size: 1rem;}}
+.verdict {{border-radius: 12px; padding: 16px 20px; color: #fff; margin-bottom: 6px;}}
+.verdict .big {{font-size: 1.45rem; font-weight: 700;}}
+.verdict.bad {{background: linear-gradient(120deg, #b71c1c, #d32f2f);}}
+.verdict.ok {{background: linear-gradient(120deg, #1b5e20, #2e7d32);}}
+.typecard {{border: 1px solid #d9e0e6; border-radius: 12px; padding: 14px 18px; background: #fff;}}
+.typecard .name {{color: {TEAL}; font-weight: 700; font-size: 1.1rem;}}
+.typecard p {{margin: 6px 0 0;}}
+.kpi {{border: 1px solid #d9e0e6; border-radius: 12px; padding: 14px 16px; background: #fff;}}
+.kpi .v {{font-size: 1.7rem; font-weight: 700; color: {TEAL};}}
+.kpi .l {{font-size: .85rem; color: #5b6770;}}
+</style>
+<div class="hero"><h1>⚓ CorroVision</h1><p>{t['tagline']}</p></div>
+""", unsafe_allow_html=True)
 
 
-# ----------------------------------------------------------------------------- interface
-CSS = """
-.gradio-container {max-width: 1120px !important; margin: 0 auto !important;}
-#hero {background: linear-gradient(135deg, #062a4f 0%, #0b5a8a 55%, #14879b 100%); border-radius: 18px;
-       padding: 30px 34px; color: #fff; margin-bottom: 6px;}
-#hero h1 {color: #fff; font-size: 2.1rem; margin: 0 0 4px; letter-spacing: .3px;}
-#hero p {color: #d9ecf7; margin: 0; font-size: 1.02rem;}
-#hero .chips {margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;}
-#hero .chip {background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.25); border-radius: 999px;
-             padding: 5px 14px; font-size: .88rem; color: #fff;}
-.verdict {border-radius: 14px; padding: 18px 22px; border: 1px solid transparent;}
-.verdict .v-title {font-size: 1.7rem; font-weight: 700; line-height: 1.2;}
-.verdict .v-line {font-size: 1rem; margin-top: 4px; opacity: .92;}
-.verdict.ok {background: #e6f6ec; border-color: #9bd4b0; color: #0f5a2e;}
-.verdict.bad {background: #fdebe6; border-color: #f0b3a2; color: #8a2a12;}
-.verdict.idle {background: #eef2f6; border-color: #d5dde6; color: #3d4a5a;}
-#inspect {background: #0b5a8a !important; color: #fff !important; font-weight: 600; border: none !important;}
-#inspect:hover {background: #094a73 !important;}
-footer {display: none !important;}
-"""
+@st.cache_resource(show_spinner='Loading model...')
+def get_predictor():
+    from predictor import Predictor
+    return Predictor()
 
-HERO = """
-<div id="hero">
-  <h1>CorroVision</h1>
-  <p>AI inspection of marine structures: detects corrosion and names its type.</p>
-  <div class="chips">
-    <span class="chip">Stage 1 · Healthy vs. Corroded · 99.6% test accuracy</span>
-    <span class="chip">Stage 2 · 8 corrosion types · 74.1% test accuracy</span>
-    <span class="chip">ResNet50 transfer learning</span>
-  </div>
-</div>
-"""
 
-examples_dir = HERE / 'examples'
-examples = sorted(str(p) for p in examples_dir.glob('*') if p.suffix.lower() in {'.jpg', '.jpeg', '.png'}) \
-    if examples_dir.exists() else []
+def bar_chart(names, values, highlight=None, errors=None, height=None):
+    names, values = list(names), np.asarray(values, float)
+    colors = [TEAL if (highlight is None or n == highlight) else GREY for n in names]
+    fig = go.Figure(go.Bar(
+        x=values * 100, y=names, orientation='h', marker_color=colors,
+        text=[f'{v * 100:.1f}%' for v in values], textposition='inside', insidetextanchor='start',
+        error_x=None if errors is None else dict(type='data', symmetric=False, array=errors[1] * 100,
+                                                 arrayminus=errors[0] * 100, color='#44505c', thickness=1.2)))
+    fig.update_layout(height=height or (60 + 34 * len(names)), margin=dict(l=0, r=10, t=6, b=6),
+                      xaxis=dict(range=[0, 100], ticksuffix='%', gridcolor='#e6eaee'),
+                      yaxis=dict(autorange='reversed'), plot_bgcolor='#fff', showlegend=False)
+    return fig
 
-with gr.Blocks(title='CorroVision') as demo:
-    gr.HTML(HERO)
-    with gr.Row(equal_height=False):
-        with gr.Column(scale=5):
-            inp = gr.Image(type='pil', label='Structure image', height=380, sources=['upload', 'clipboard'])
-            btn = gr.Button('Inspect', elem_id='inspect', size='lg')
-            if examples:
-                gr.Examples(examples=examples, inputs=inp, label='Try an example')
-        with gr.Column(scale=5):
-            verdict = gr.HTML(card('idle', 'No image yet', 'Upload a photo of a structure, then press Inspect.'))
-            types = gr.Label(num_top_classes=8, label='Stage 2 · corrosion type probabilities')
-            note = gr.Markdown()
-    with gr.Accordion('What the model sees (after preprocessing)', open=False):
-        proc = gr.Image(label='224 x 224 · denoised · colour corrected · contrast enhanced', height=260)
-    with gr.Accordion('How it works and limits', open=False):
-        gr.Markdown(
-            'The image is resized to 224 x 224, denoised with a bilateral filter, colour corrected with the '
-            'Gray-World method and contrast enhanced with CLAHE. A ResNet50 pretrained on ImageNet turns it into '
-            '2,048 features. **Stage 1** decides Healthy or Corroded. If corroded, **Stage 2** scores the eight '
-            'corrosion types.\n\n'
-            '**Limits.** The models were trained on the Marine Corrosion Dataset from Kaggle. Stage 2 is right '
-            'about 3 times out of 4 on that dataset, and results on real underwater footage may be lower. '
-            'This is a course project demo, not an inspection tool.')
-    btn.click(predict, inp, [verdict, types, proc, note])
-    inp.upload(predict, inp, [verdict, types, proc, note])
 
-if __name__ == '__main__':
-    demo.launch(css=CSS, theme=gr.themes.Soft(primary_hue='blue', neutral_hue='slate'), share='--share' in sys.argv)
+tab_analyze, tab_results, tab_about = st.tabs([t['tab_analyze'], t['tab_results'], t['tab_about']])
+
+# ============================================================================= 1. analyze an image
+with tab_analyze:
+    c_up, c_cam = st.columns([3, 1])
+    with c_up:
+        uploaded = st.file_uploader(t['upload'], type=['jpg', 'jpeg', 'png', 'bmp', 'webp'], key='uploader')
+    with c_cam:
+        st.write('')
+        shot = st.camera_input(t['camera_label'], key='camera') if st.toggle(f"📷 {t['camera']}", key='use_camera') else None
+    source = uploaded or shot
+    if source is not None:                       # keep the image when the language or a setting changes
+        st.session_state['image_bytes'] = source.getvalue()
+    if 'image_bytes' not in st.session_state:
+        st.info(t['waiting'])
+    else:
+        rgb = np.asarray(Image.open(io.BytesIO(st.session_state['image_bytes'])).convert('RGB'))
+        res = get_predictor().predict(rgb, threshold=threshold, tta=use_tta, cam=use_cam)
+
+        with st.expander(f"🧪 {t['steps_title']}"):
+            for col, key in zip(st.columns(4), ['resize', 'denoise', 'color', 'clahe']):
+                col.image(res['steps'][key], caption=t[f'step_{key}'], width='stretch')
+
+        left, right = st.columns([2, 3], gap='large')
+        with left:
+            st.image(rgb, caption=t['original'], width='stretch')
+            if res['gradcam'] is not None:
+                st.image(res['gradcam'], caption=t['cam_caption'], width='stretch')
+        with right:
+            # ---- Stage 1
+            st.subheader(t['s1_title'])
+            p = res['p_corroded']
+            if res['corroded']:
+                st.markdown(f'<div class="verdict bad"><div class="big">⚠️ {t["corroded"]}</div>'
+                            f'{t["confidence"]}: {p * 100:.1f}%</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="verdict ok"><div class="big">✅ {t["healthy"]}</div>'
+                            f'{t["confidence"]}: {(1 - p) * 100:.1f}%</div>', unsafe_allow_html=True)
+            gauge = go.Figure(go.Indicator(
+                mode='gauge+number', value=p * 100, number=dict(suffix='%', font=dict(size=34)),
+                gauge=dict(axis=dict(range=[0, 100]), bar=dict(color=RED if res['corroded'] else GREEN),
+                           threshold=dict(line=dict(color='#111', width=3), value=threshold * 100))))
+            gauge.update_layout(height=230, margin=dict(l=40, r=40, t=20, b=10))
+            st.caption(t['gauge'])
+            st.plotly_chart(gauge, width='stretch')
+
+            # ---- Stage 2
+            st.subheader(t['s2_title'])
+            probs = pd.Series(res['type_probs']).sort_values(ascending=False)
+            if not res['corroded']:
+                st.info(t['s2_skipped'])
+            else:
+                name, what, action = TYPES[res['top_type']][lang]
+                st.markdown(f'<div class="typecard"><div class="name">{name}</div>'
+                            f'<div>{t["type_conf"]}: {probs.iloc[0] * 100:.1f}%</div>'
+                            f'<p><b>{t["what"]}</b> {what}</p><p><b>{t["action"]}:</b> {action}</p></div>',
+                            unsafe_allow_html=True)
+                if probs.iloc[0] - probs.iloc[1] < 0.15:
+                    st.warning(t['low_conf'])
+                st.caption(t['top3'])
+                top3 = probs.head(3)
+                st.plotly_chart(bar_chart([TYPES[k][lang][0] for k in top3.index], top3.values),
+                                width='stretch')
+                with st.expander(t['all_types']):
+                    st.plotly_chart(bar_chart([TYPES[k][lang][0] for k in probs.index], probs.values),
+                                    width='stretch')
+
+            report = {'stage1': {'label': 'Corroded' if res['corroded'] else 'Healthy',
+                                 'probability_corroded': round(p, 4), 'threshold': threshold},
+                      'stage2': ({'type': res['top_type'],
+                                  'probabilities': {k: round(v, 4) for k, v in probs.items()}}
+                                 if res['corroded'] else None),
+                      'settings': {'test_time_augmentation': use_tta}, 'model': APP_MODEL}
+            st.download_button(t['download'], json.dumps(report, indent=2), 'corrovision_result.json', 'application/json')
+
+# ============================================================================= 2. project results
+with tab_results:
+    st.subheader(t['res_title'])
+    st.caption(t['res_sub'])
+    s1 = pd.read_csv(RESULTS / 'stage1_results.csv', index_col=0)
+    s2 = pd.read_csv(RESULTS / 'stage2_results.csv', index_col=0)
+    e2e = pd.read_csv(RESULTS / 'end_to_end_results.csv', index_col=0)
+    rec = pd.read_csv(RESULTS / 'stage2_per_class_recall.csv', index_col=0)
+
+    kpis = [(f"{s1.loc[APP_MODEL, 'Accuracy'] * 100:.1f}%", t['m_s1']), (f"{s1.loc[APP_MODEL, 'ROC-AUC']:.4f}", t['m_auc']),
+            (f"{s2.loc[APP_MODEL, 'Accuracy'] * 100:.1f}%", t['m_s2']), (f"{e2e.loc[APP_MODEL, 'Accuracy'] * 100:.1f}%", t['m_e2e'])]
+    for col, (v, l) in zip(st.columns(4), kpis):
+        col.markdown(f'<div class="kpi"><div class="v">{v}</div><div class="l">{l}</div></div>', unsafe_allow_html=True)
+    st.caption(t['m_note'])
+
+    levels = {t['lv_e2e']: e2e, t['lv_s1']: s1, t['lv_s2']: s2}
+    df = levels[st.radio(t['level'], list(levels), horizontal=True)].sort_values('Accuracy', ascending=False)
+    st.markdown(f"**{t['acc_chart']}**")
+    st.plotly_chart(bar_chart(df.index, df['Accuracy'], highlight=APP_MODEL,
+                              errors=((df['Accuracy'] - df['Acc CI low']).values,
+                                      (df['Acc CI high'] - df['Accuracy']).values)), width='stretch')
+    st.info(t['why'])
+
+    st.markdown(f"**{t['recall_chart']}**")
+    method = st.selectbox(t['method'], list(rec.index), index=list(rec.index).index(APP_MODEL))
+    r = rec.loc[method].sort_values(ascending=False)
+    st.plotly_chart(bar_chart([TYPES[k][lang][0] for k in r.index], r.values), width='stretch')
+
+    st.markdown(f"### {t['figures']}")
+    figs = sorted((RESULTS / 'figures').glob('*.png'))
+    if figs:
+        pick = st.selectbox(' ', figs, format_func=lambda f: f.stem.replace('_', ' ').title(), label_visibility='collapsed')
+        st.image(str(pick), width='stretch')
+    with st.expander(f"📋 {t['tables']}"):
+        for title, d in (('Stage 1', s1), ('Stage 2', s2), ('End to end', e2e),
+                         ('McNemar', pd.read_csv(RESULTS / 'mcnemar.csv'))):
+            st.markdown(f'**{title}**'); st.dataframe(d.round(4), width='stretch')
+
+# ============================================================================= 3. about
+with tab_about:
+    st.markdown(t['about_md'])

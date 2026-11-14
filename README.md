@@ -39,32 +39,27 @@ flowchart LR
 
 ## Demo app
 
-Upload a photo of a structure and the app tells you whether it is healthy or corroded, and which
-corrosion type it most likely is.
+A Streamlit interface in English and Arabic. Upload a photo (or use the camera) and it shows the Stage 1
+verdict, the corrosion type with an explanation and a suggested action, and a Grad-CAM heat map of where
+the model looked. A second page shows the project results interactively.
 
-<img src="docs/app_demo.png" alt="CorroVision demo app" width="80%">
+| Analyze (English) | Analyze (Arabic) |
+| :---: | :---: |
+| <img src="docs/app_en.jpg" width="100%"> | <img src="docs/app_ar.jpg" width="100%"> |
 
-**Run it on Google Colab** (no installation): open a new notebook and run this cell, then open the
-public link it prints.
-
-```python
-!git clone https://github.com/deem-de/CorroVision.git
-%cd CorroVision/app
-!pip -q install gradio
-!python app.py --share
-```
-
-**Run it on your computer:**
+**Run it:**
 
 ```bash
 git clone https://github.com/deem-de/CorroVision.git
-cd CorroVision/app
-pip install -r requirements.txt
-python app.py
+cd CorroVision
+pip install -r app/requirements.txt
+streamlit run app/app.py
 ```
 
-The app uses the frozen ResNet50 with the two classification heads trained in this project
-(`app/models/`, exported by `code/08_export_heads.py`).
+Then open http://localhost:8501. The first start downloads the ResNet50 ImageNet weights (about 95 MB).
+The model is the frozen ResNet50 with the two classification heads trained in this project
+(`app/models/`, exported by `code/08_export_heads.py`). See [app/GUIDE_AR.md](app/GUIDE_AR.md) for a
+step-by-step guide in Arabic.
 
 ## Results
 
@@ -180,7 +175,10 @@ CorroVision/
 │   ├── 07_backbones.py                ConvNeXt / EfficientNetV2 features, fusion, TTA
 │   └── 08_export_heads.py             export the classification heads used by the app
 ├── app/
-│   ├── app.py                         demo app (Gradio)
+│   ├── app.py                         Streamlit interface (English / Arabic)
+│   ├── predictor.py                   model loading, preprocessing, prediction, Grad-CAM
+│   ├── texts.py                       interface text and corrosion-type descriptions
+│   ├── GUIDE_AR.md                    step-by-step guide in Arabic
 │   └── models/                        the two trained classification heads
 ├── results/                           result tables (CSV) and figures
 └── requirements.txt

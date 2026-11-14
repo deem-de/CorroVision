@@ -1,5 +1,7 @@
-gradio>=6.0
-tensorflow
+streamlit>=1.50
+plotly
+tensorflow-cpu
 opencv-python-headless
 numpy
+pandas
 pillow
