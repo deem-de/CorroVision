@@ -37,6 +37,35 @@ flowchart LR
     E --> F([One of 8 corrosion types])
 ```
 
+## Demo app
+
+Upload a photo of a structure and the app tells you whether it is healthy or corroded, and which
+corrosion type it most likely is.
+
+<img src="docs/app_demo.png" alt="CorroVision demo app" width="80%">
+
+**Run it on Google Colab** (no installation): open a new notebook and run this cell, then open the
+public link it prints.
+
+```python
+!git clone https://github.com/deem-de/CorroVision.git
+%cd CorroVision/app
+!pip -q install gradio
+!python app.py --share
+```
+
+**Run it on your computer:**
+
+```bash
+git clone https://github.com/deem-de/CorroVision.git
+cd CorroVision/app
+pip install -r requirements.txt
+python app.py
+```
+
+The app uses the frozen ResNet50 with the two classification heads trained in this project
+(`app/models/`, exported by `code/08_export_heads.py`).
+
 ## Results
 
 All numbers are measured on the held-out test split (1,349 images; Stage 2 uses its 1,199 corroded images).
@@ -148,7 +177,11 @@ CorroVision/
 │   ├── 04_transfer.py                 ResNet50: feature extraction and fine-tuning
 │   ├── 05_evaluate.py                 metrics, threshold tuning, McNemar, figures
 │   ├── 06_data_figures.py             data figures
-│   └── 07_backbones.py                ConvNeXt / EfficientNetV2 features, fusion, TTA
+│   ├── 07_backbones.py                ConvNeXt / EfficientNetV2 features, fusion, TTA
+│   └── 08_export_heads.py             export the classification heads used by the app
+├── app/
+│   ├── app.py                         demo app (Gradio)
+│   └── models/                        the two trained classification heads
 ├── results/                           result tables (CSV) and figures
 └── requirements.txt
 ```

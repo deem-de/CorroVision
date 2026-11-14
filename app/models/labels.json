@@ -1,0 +1,13 @@
+{
+  "stage2_classes": [
+    "Crevice",
+    "Erosion",
+    "Galvanic",
+    "MIC",
+    "Pitting",
+    "Stress",
+    "Under Insulation",
+    "Uniform"
+  ],
+  "backbone": "ResNet50 (ImageNet, frozen, global average pooling)"
+}

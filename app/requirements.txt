@@ -1,0 +1,5 @@
+gradio>=6.0
+tensorflow
+opencv-python-headless
+numpy
+pillow

@@ -8,3 +8,4 @@ logs/
 *.keras
 *.npz
 *.npy
+!app/models/*.keras
