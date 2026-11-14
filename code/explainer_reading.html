@@ -1,0 +1,28 @@
+<h4>المرحلة الأولى (سليم/متآكل)</h4>
+<ul>
+<li><b>الـ<span class="en">Transfer Learning</span> حلّ المرحلة الأولى تقريباً:</b> <span class="en">ResNet50 fine-tuned</span> وصل 99.63% دقة، وأخطأ في 5 صور فقط من 1,349 (صورتان سليمتان قيل عنهما متآكلة، و3 متآكلة قيل عنها سليمة). الـ<span class="en">ROC-AUC</span> = 0.9999.</li>
+<li><b>الطرق الكلاسيكية تنخدع بالـ<span class="en">imbalance</span>:</b> <span class="en">HOG+SVM</span> دقته 94% لكن <span class="en">Healthy recall</span> = 56% فقط، يعني 66 صورة سليمة من 150 صُنفت متآكلة. و<span class="en">GLCM+RF</span> مثله (59.3%). هذا مع استخدام <span class="en">class weights</span>.</li>
+<li><b>الـ<span class="en">CNN</span> من الصفر أفضل في التوازن:</b> دقته 96.07% و<span class="en">Healthy recall</span> = 88.7%، لكنه يفوّت 36 صورة متآكلة.</li>
+<li><b>إضافة اللون نفعت:</b> <span class="en">Colour-Texture+RF</span> رفع الدقة من 92.8% إلى 95.7% وفوّت 5 صور متآكلة فقط، لكن <span class="en">Healthy recall</span> بقي ضعيف (64.7%).</li>
+<li><b>ضبط الـ<span class="en">threshold</span> ما أعطى فائدة ثابتة:</b> حسّن الـ<span class="en">macro-F1</span> قليلاً في <span class="en">HOG+SVM</span> و<span class="en">Colour-Texture</span> والـ<span class="en">CNN</span>، ونزّله في <span class="en">GLCM+RF</span>، وما غيّر شي يُذكر في <span class="en">ResNet50</span> لأنه أصلاً يفصل الفئتين بشكل شبه كامل. فاعتمدنا الـ<span class="en">threshold</span> الافتراضي 0.5 في النتائج الرئيسية.</li>
+</ul>
+<h4>المرحلة الثانية (نوع التآكل)</h4>
+<ul>
+<li><b>الترتيب واضح ومنطقي:</b> <span class="en">HOG</span> 28.6% → <span class="en">GLCM</span> 35.4% → <span class="en">Colour-Texture</span> 45.5% → <span class="en">Custom CNN</span> 53.1% → <span class="en">ResNet50</span> 74.1% → الدمج مع <span class="en">TTA</span> 75.9%. التخمين العشوائي 12.5%.</li>
+<li><b>اللون معلومة مهمة:</b> إضافة <span class="en">HSV + LBP</span> رفعت الـ<span class="en">Random Forest</span> 10 نقاط كاملة (من 35.4% إلى 45.5%)، وهذا يثبت فرضية تقرير التقدم أن <span class="en">HOG</span> و<span class="en">GLCM</span> ينقصهم اللون.</li>
+<li><b>الـ<span class="en">fine-tuning</span> ما حسّن:</b> 73.9% مقابل 74.1% للـ<span class="en">backbone</span> المجمّد، و<span class="en">McNemar</span> يقول ما فيه فرق (<span class="en">p = 0.90</span>). السبب <span class="en">overfitting</span>: دقة التدريب ارتفعت من 85% إلى 90% والـ<span class="en">validation loss</span> ارتفعت بدل ما تنزل.</li>
+<li><b>الشبكات الأحدث ما كسرت السقف:</b> <span class="en">ConvNeXt-Tiny</span> (71.8%) و<span class="en">EfficientNetV2-S</span> (70.6%) منفردين ما تجاوزوا <span class="en">ResNet50</span>. دمج خصائص الثلاث مع <span class="en">TTA</span> أعطى 75.9%، والفرق عن <span class="en">ResNet50</span> <b>غير دال إحصائياً</b> (<span class="en">p = 0.23</span> بعد <span class="en">Holm</span>). ثلاث شبكات مختلفة تماماً توقفت عند نفس المستوى تقريباً (71–76%)، وهذا دليل قوي أن السقف من الداتا نفسها وليس من المودل.</li>
+<li><b>الأنواع الأصعب:</b> <span class="en">Crevice, Galvanic, Under-insulation</span> هي الأضعف عند كل الطرق (62–70% عند أفضل مودل)، والأسهل <span class="en">Stress, Erosion, Uniform, MIC</span> (79–84%).</li>
+</ul>
+<h4>الـ<span class="en">End-to-end</span></h4>
+<ul>
+<li>أفضل <span class="en">pipeline</span> كامل: الدمج مع <span class="en">TTA</span> = <b>77.8%</b> على 9 فئات، ثم <span class="en">ResNet50</span> = 76.6%.</li>
+<li><b>تقريباً كل الأخطاء من المرحلة الثانية:</b> في <span class="en">ResNet50 (frozen)</span> من أصل 316 خطأ، 6 فقط من المرحلة الأولى و310 من تحديد النوع. يعني الكشف ممتاز والمشكلة الباقية هي تمييز النوع.</li>
+</ul>
+<h4>الخلاصة</h4>
+<div class="box">
+(1) كشف التآكل (سليم/متآكل) محلول عملياً بالـ<span class="en">Transfer Learning</span> (99.6%).<br>
+(2) تحديد نوع التآكل ممكن بدقة حوالي 75%، وهذا 6 أضعاف التخمين العشوائي، لكنه يتوقف عند سقف تفرضه الداتا.<br>
+(3) الخصائص المتعلَّمة (<span class="en">deep features</span>) تتفوق بوضوح ودلالة إحصائية على الخصائص اليدوية في المرحلتين.<br>
+(4) مع داتا بهذا الحجم، تدريب <span class="en">head</span> فوق شبكة مجمّدة كافٍ، والـ<span class="en">fine-tuning</span> والشبكات الأكبر ما تضيف فرق مثبت.
+</div>

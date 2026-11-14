@@ -1,0 +1,6 @@
+{
+  "hog_max_abs_diff": 0.0,
+  "glcm_max_abs_diff": 0.0,
+  "hog_identical": true,
+  "glcm_identical": true
+}

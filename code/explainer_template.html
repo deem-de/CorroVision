@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CorroVision - الشرح التقني الكامل</title>
+<style>
+  :root { --ink:#16181d; --muted:#5b6170; --line:#dfe2e8; --bg:#fbfbfa; --card:#ffffff; --accent:#1f5fae; --soft:#eef4fb; --warn:#fff6e0; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"Segoe UI","Noto Naskh Arabic","Tahoma",sans-serif; line-height:1.95; font-size:16.5px; }
+  main { max-width: 980px; margin: 0 auto; padding: 28px 18px 80px; }
+  h1 { font-size: 30px; margin: 0 0 6px; line-height:1.4; }
+  h2 { font-size: 23px; margin: 46px 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--accent); }
+  h3 { font-size: 19px; margin: 28px 0 6px; color: var(--accent); }
+  h4 { font-size: 16.5px; margin: 18px 0 4px; }
+  p { margin: 8px 0; }
+  .sub { color: var(--muted); margin-bottom: 18px; }
+  code, .en { direction:ltr; unicode-bidi:embed; font-family: Consolas, "Courier New", monospace; font-size: 0.92em; background:#f0f1f4; padding: 1px 5px; border-radius: 4px; }
+  .en { font-family: inherit; background: none; padding: 0; }
+  pre { direction:ltr; text-align:left; background:#f0f1f4; padding: 12px 14px; border-radius: 8px; overflow-x:auto; font-size: 13.5px; line-height:1.6; }
+  .box { background: var(--soft); border-right: 4px solid var(--accent); padding: 10px 14px; border-radius: 6px; margin: 12px 0; }
+  .warn { background: var(--warn); border-right: 4px solid #d99a00; padding: 10px 14px; border-radius: 6px; margin: 12px 0; }
+  .tw { overflow-x:auto; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; background: var(--card); font-size: 14.5px; }
+  th, td { border: 1px solid var(--line); padding: 6px 9px; text-align: center; }
+  th { background: #eef0f4; }
+  td:first-child, th:first-child { text-align: right; font-weight: 600; }
+  table.ltr { direction:ltr; } table.ltr td:first-child, table.ltr th:first-child { text-align:left; }
+  img { max-width: 100%; border: 1px solid var(--line); border-radius: 6px; background:#fff; display:block; margin: 10px auto 4px; }
+  .cap { text-align:center; color: var(--muted); font-size: 14px; margin-bottom: 14px; }
+  ul, ol { margin: 6px 0; padding-right: 24px; }
+  li { margin: 3px 0; }
+  nav { background: var(--card); border:1px solid var(--line); border-radius: 8px; padding: 12px 18px; }
+  nav a { color: var(--accent); text-decoration: none; }
+  .q { font-weight: 700; margin-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>CorroVision — الشرح التقني الكامل للمشروع</h1>
+<p class="sub">كشف التآكل البحري وتصنيف نوعه بالـ<span class="en">Computer Vision</span> · مقرر <span class="en">CAI401</span> · كل الأرقام في هذا الملف محسوبة فعلياً من تشغيل الكود على الـ<span class="en">test set</span></p>
+
+<nav>
+<b>المحتويات</b>
+<ol>
+<li><a href="#s1">المشكلة والحل بالمختصر</a></li>
+<li><a href="#s2">الداتا: المصدر، التنظيف، التقسيم</a></li>
+<li><a href="#s3">الـPreprocessing خطوة بخطوة</a></li>
+<li><a href="#s4">الـAugmentation</a></li>
+<li><a href="#s5">Train / Validation / Test: دور كل جزء</a></li>
+<li><a href="#s6">النماذج: كل مودل، مكوناته، ودوره</a></li>
+<li><a href="#s7">الـTwo-Stage Pipeline</a></li>
+<li><a href="#s8">الـEvaluation: كل مقياس وش معناه وليش استخدمناه</a></li>
+<li><a href="#s9">النتائج الفعلية وقراءتها</a></li>
+<li><a href="#s10">المشاكل التي واجهتني وكيف حُلّت</a></li>
+<li><a href="#s11">ملفات الكود: كل ملف وش يسوي</a></li>
+<li><a href="#s12">حدود المشروع (Limitations)</a></li>
+<li><a href="#s13">أسئلة متوقعة وإجاباتها</a></li>
+</ol>
+</nav>
+
+<!-- ============================================================ -->
+<h2 id="s1">1. المشكلة والحل بالمختصر</h2>
+
+<h3>المشكلة</h3>
+<p>الهياكل البحرية (أنابيب، هياكل سفن، منصات) تتآكل بسبب ماء البحر. الفحص حالياً يعتمد على غواصين أو مشغّلين يشاهدون فيديو، وهذا بطيء ومكلف وخطر ويعتمد على رأي الشخص. والمطلوب ليس فقط معرفة "فيه تآكل أو لا"، بل <b>نوع</b> التآكل، لأن كل نوع له سرعة انتشار وطريقة إصلاح مختلفة.</p>
+
+<h3>الحل</h3>
+<p>نظام <span class="en">Computer Vision</span> يفحص الصورة على مرحلتين:</p>
+<ul>
+<li><b><span class="en">Stage 1 (Detection)</span>:</b> تصنيف ثنائي <span class="en">binary</span>: الصورة <span class="en">Healthy</span> أو <span class="en">Corroded</span>.</li>
+<li><b><span class="en">Stage 2 (Type classification)</span>:</b> إذا كانت <span class="en">Corroded</span>، نحدد نوع التآكل من 8 أنواع: <span class="en">crevice, erosion, galvanic, MIC, pitting, stress, under-insulation, uniform</span>.</li>
+</ul>
+<p>وقارنّا أربع طرق أساسية في كل مرحلة على نفس صور الاختبار بالضبط:</p>
+<div class="tw"><table>
+<tr><th>الطريقة</th><th>النوع</th><th>الفكرة</th></tr>
+<tr><td><span class="en">HOG + SVM</span></td><td>كلاسيكي</td><td>نستخرج خصائص الحواف يدوياً ثم نصنّفها بـ<span class="en">SVM</span></td></tr>
+<tr><td><span class="en">GLCM + Random Forest</span></td><td>كلاسيكي</td><td>نستخرج خصائص الملمس <span class="en">texture</span> يدوياً ثم نصنّفها بـ<span class="en">Random Forest</span></td></tr>
+<tr><td><span class="en">Custom CNN</span></td><td><span class="en">Deep learning</span></td><td>شبكة عصبية نبنيها وندربها من الصفر، تتعلم الخصائص بنفسها</td></tr>
+<tr><td><span class="en">Transfer Learning (ResNet50)</span></td><td><span class="en">Deep learning</span></td><td>شبكة جاهزة مدرّبة على <span class="en">ImageNet</span> نعيد توظيفها لمشكلتنا</td></tr>
+</table></div>
+<p>وأضفنا تجربة خامسة كامتداد <span class="en">(extension)</span>: <span class="en">Colour-Texture + Random Forest</span>، لأن <span class="en">HOG</span> و<span class="en">GLCM</span> لا يستخدمان اللون إطلاقاً.</p>
+
+<div class="box"><b>الفرق الجوهري بين الكلاسيكي والـ<span class="en">Deep</span>:</b> في الكلاسيكي نحن نقرر "وش الخصائص المهمة" (حواف، ملمس) ونحسبها بمعادلات ثابتة، ثم المصنّف يتعلم فقط كيف يفصل بينها. في الـ<span class="en">Deep learning</span> الشبكة تتعلم الخصائص نفسها من الصور مباشرة.</div>
+
+<!-- ============================================================ -->
+<h2 id="s2">2. الداتا: المصدر، التنظيف، التقسيم</h2>
+
+<h3>المصدر</h3>
+<p><span class="en">Marine Corrosion Dataset</span> من <span class="en">Kaggle</span> (<code>ebrahim007/marine-corrosion-dataset</code>). فيها <b>9,000 صورة</b> موزعة بالتساوي على <b>9 فئات</b> (1,000 لكل فئة): فئة <span class="en">healthy_structure</span> و8 أنواع تآكل.</p>
+{{FIG:class_examples|مثال واحد من كل فئة من الفئات التسع}}
+
+<h3>التنظيف (Data cleaning)</h3>
+<p>ثلاث فحوصات على كل ملف:</p>
+<ol>
+<li><b>سلامة الملف:</b> فتح كل صورة والتحقق منها (<code>PIL.Image.verify</code>). النتيجة: لا توجد ملفات تالفة.</li>
+<li><b>التكرار والصور الفارغة:</b> حسبنا <span class="en">MD5 hash</span> لكل ملف (لو ملفين لهم نفس الـ<span class="en">hash</span> فهم نفس الملف بالضبط)، وحسبنا السطوع <span class="en">brightness</span> والحدّة <span class="en">sharpness</span> بمقياس <span class="en">Laplacian variance</span>. الفحصان أشارا لنفس <b>9 صور</b>: صور سوداء تماماً (placeholder) موزعة على 7 فئات. حُذفت كلها، لأن نفس الصورة السوداء موجودة تحت فئات مختلفة = <span class="en">label conflict</span>.</li>
+<li><b>الضبابية:</b> أقل 1% حدّة (90 صورة) فُحصت بالعين. أغلبها صور سليمة لكن ناعمة <span class="en">soft-focus</span>، فأبقيناها.</li>
+</ol>
+<p>بعد التنظيف: <b>8,991 صورة</b>.</p>
+
+<h3>تجهيز الـLabels للمرحلتين</h3>
+<ul>
+<li><b><span class="en">Stage 1</span>:</b> دمجنا أنواع التآكل الثمانية في فئة واحدة <span class="en">Corroded (superclass)</span>. النتيجة: 999 <span class="en">Healthy</span> مقابل 7,992 <span class="en">Corroded</span>، يعني نسبة تقريباً <b>1:8</b>. هذا <span class="en">class imbalance</span> وهو أهم تحدٍّ في المرحلة الأولى.</li>
+<li><b><span class="en">Stage 2</span>:</b> فقط الصور المتآكلة، بـ8 فئات متوازنة تقريباً (~999 لكل فئة).</li>
+</ul>
+{{FIG:class_distribution|توزيع الفئات بعد التنظيف: يسار المرحلة الأولى (غير متوازنة)، يمين الفئات التسع (متوازنة)}}
+
+<h3>التقسيم (Split)</h3>
+<p>قسّمنا الداتا <b>70% train / 15% validation / 15% test</b> باستخدام <code>train_test_split</code> مع:</p>
+<ul>
+<li><b><span class="en">Stratified sampling</span> على الفئات التسع الأصلية:</b> يعني كل فئة تأخذ نفس نسبتها في كل جزء. فتكون المرحلتان متوازنتين تلقائياً في كل الأجزاء.</li>
+<li><b><span class="en">random_state = 42</span>:</b> رقم ثابت حتى يطلع نفس التقسيم كل مرة (<span class="en">reproducibility</span>).</li>
+<li><b>ملف تقسيم واحد مشترك</b> (<code>processed_images.csv</code>) يستخدمه كل الفريق وكل النماذج، فكل مودل يُختبر على <b>نفس الصور بالضبط</b>. هذا شرط المقارنة العادلة وشرط اختبار <span class="en">McNemar</span>.</li>
+</ul>
+<div class="tw"><table>
+<tr><th>الفئة</th><th>Train</th><th>Validation</th><th>Test</th><th>المجموع</th></tr>
+<tr><td>Healthy</td><td>699</td><td>150</td><td>150</td><td>999</td></tr>
+<tr><td>Corroded (8 أنواع)</td><td>5,594</td><td>1,199</td><td>1,199</td><td>7,992</td></tr>
+<tr><td>المجموع</td><td>6,293</td><td>1,349</td><td>1,349</td><td>8,991</td></tr>
+</table></div>
+
+<!-- ============================================================ -->
+<h2 id="s3">3. الـPreprocessing خطوة بخطوة</h2>
+<p>كل صورة (train و val و test) تمر بنفس أربع خطوات وبنفس الترتيب. الهدف: توحيد الصور وتقليل مشاكل التصوير تحت الماء (لون مائل للأزرق/الأخضر، تباين ضعيف، ضوضاء).</p>
+<div class="tw"><table>
+<tr><th>#</th><th>الخطوة</th><th>الإعدادات</th><th>وش تسوي وليش</th></tr>
+<tr><td>1</td><td><span class="en">Resize</span></td><td>224×224، <code>INTER_AREA</code></td><td>توحيد الحجم. 224×224 هو حجم الإدخال القياسي لـ<span class="en">ResNet50</span>. <code>INTER_AREA</code> أفضل طريقة للتصغير لأنها تأخذ متوسط البكسلات فما تسبب تشويش.</td></tr>
+<tr><td>2</td><td><span class="en">Bilateral filter</span></td><td><code>d=5, sigmaColor=20, sigmaSpace=3</code></td><td>إزالة الضوضاء مع <b>الحفاظ على الحواف</b>. الفلتر العادي (<span class="en">Gaussian</span>) يطمس كل شي، أما هذا فيأخذ متوسط البكسلات القريبة مكانياً <b>والمتشابهة لونياً فقط</b>، فما يطمس حدود التآكل.</td></tr>
+<tr><td>3</td><td><span class="en">Gray-World colour correction</span></td><td>الـ<span class="en">gains</span> محصورة بين 0.5 و 3.0</td><td>تصحيح اللون. الفرضية: متوسط ألوان أي مشهد طبيعي يكون رمادي. فنحسب متوسط كل قناة (<span class="en">R, G, B</span>) ونضرب كل قناة بمعامل يخلي متوسطاتها متساوية. هذا يشيل الصبغة الزرقاء/الخضراء. حصر المعامل يمنع المبالغة.</td></tr>
+<tr><td>4</td><td><span class="en">CLAHE</span></td><td><code>clipLimit=2.0, tileGrid=8×8</code> على قناة <span class="en">L</span> في <span class="en">LAB</span></td><td>تحسين التباين المحلي. يقسم الصورة لمربعات 8×8 ويسوي <span class="en">histogram equalization</span> لكل مربع، مع حد أعلى (<span class="en">clip</span>) حتى ما يكبّر الضوضاء. طبقناه على قناة الإضاءة <span class="en">L</span> فقط حتى ما تتغير الألوان.</td></tr>
+</table></div>
+{{FIG:preprocessing_steps|نفس الصورة بعد كل خطوة: الأصل، Resize، Bilateral، Gray-World، CLAHE}}
+<p>الصور الناتجة تُحفظ <span class="en">PNG</span> بقيم 0–255، وعند إدخالها للشبكة تُقسم على 255 لتصير بين 0 و 1 (<span class="en">normalization</span>). (استثناء: <span class="en">ResNet50</span> له <span class="en">preprocessing</span> خاص، مشروح في قسمه.)</p>
+
+<!-- ============================================================ -->
+<h2 id="s4">4. الـAugmentation</h2>
+<p><b>على الـ<span class="en">training set</span> فقط.</b> لكل صورة تدريب ولّدنا نسخة إضافية واحدة بتحويلات عشوائية:</p>
+<ul>
+<li>دوران عشوائي بين <span class="en">−30°</span> و <span class="en">+30°</span> (والحواف تُعبّأ بالانعكاس <code>BORDER_REFLECT_101</code>).</li>
+<li><span class="en">Horizontal flip</span> باحتمال 50% و<span class="en">Vertical flip</span> باحتمال 50%.</li>
+<li>تغيير الإضاءة: ضرب بمعامل بين 0.7 و 1.3 وإضافة قيمة بين <span class="en">−0.08</span> و <span class="en">+0.08</span>.</li>
+</ul>
+<p>النتيجة: التدريب تضاعف من 6,293 إلى <b>12,586 صورة</b> (منها 11,188 متآكلة تُستخدم في <span class="en">Stage 2</span>).</p>
+{{FIG:augmentation_examples|فوق: الصورة بعد المعالجة. تحت: نسختها بعد الـAugmentation}}
+<div class="box"><b>ليش <span class="en">augmentation</span>؟</b> المودل يشوف نفس الجسم بزوايا وإضاءات مختلفة، فيتعلم أن التآكل هو التآكل مهما كان اتجاه الكاميرا أو الإضاءة. هذا يقلل الـ<span class="en">overfitting</span>.<br>
+<b>ليش ما نسويها على <span class="en">validation/test</span>؟</b> لأن هذي الأجزاء لازم تمثل الصور الحقيقية كما هي. لو عدّلناها ما نقيس الأداء الحقيقي.<br>
+<b>ليش كل صورة ونسختها في نفس الجزء؟</b> لو الصورة الأصلية في <span class="en">train</span> ونسختها المعدّلة في <span class="en">test</span> يصير <span class="en">data leakage</span> (المودل شاف الصورة قبل). عندنا النسخ المعدّلة كلها داخل <span class="en">train</span> فقط، والكود يتحقق من هذا بـ<code>assert</code>.</div>
+
+<!-- ============================================================ -->
+<h2 id="s5">5. Train / Validation / Test: دور كل جزء</h2>
+<div class="tw"><table>
+<tr><th>الجزء</th><th>العدد</th><th>دوره بالضبط</th></tr>
+<tr><td>Training</td><td>12,586 (بعد الـaugmentation)</td><td>المودل يتعلم منه: هنا تتعدل الأوزان <span class="en">weights</span>.</td></tr>
+<tr><td>Validation</td><td>1,349</td><td>لاتخاذ القرارات <b>بدون لمس الـtest</b>: اختيار الـ<span class="en">hyperparameters</span> (مثل <code>C</code> و عدد الأشجار)، متى نوقف التدريب (<span class="en">early stopping</span>)، أي <span class="en">epoch</span> نحفظ، تخفيض الـ<span class="en">learning rate</span>، واختيار الـ<span class="en">decision threshold</span>.</td></tr>
+<tr><td>Test</td><td>1,349</td><td>يُستخدم <b>مرة واحدة في النهاية</b> لقياس الأداء النهائي. كل الأرقام في جداول النتائج منه.</td></tr>
+</table></div>
+<div class="warn"><b>القاعدة الذهبية:</b> أي قرار يُتخذ بناءً على الـ<span class="en">test set</span> يخلي نتيجته متفائلة وغير صادقة. لهذا كل الاختيارات (حتى الـ<span class="en">threshold</span>) تمت على الـ<span class="en">validation</span>، والـ<span class="en">test</span> للتقرير فقط.</div>
+<p><b>في <span class="en">Stage 2</span>:</b> التدريب والـ<span class="en">validation</span> والاختبار على الصور المتآكلة فقط: 11,188 / 1,199 / 1,199.</p>
+
+<!-- ============================================================ -->
+<h2 id="s6">6. النماذج: كل مودل، مكوناته، ودوره</h2>
+
+<h3>6.1 الطريقة الأولى: <span class="en">HOG + SVM</span></h3>
+<h4>أ) <span class="en">HOG (Histogram of Oriented Gradients)</span> — استخراج الخصائص</h4>
+<p><b>الفكرة:</b> شكل الجسم يُعرف من اتجاهات حوافه. <span class="en">HOG</span> يلخص "في كل منطقة صغيرة، الحواف رايحة بأي اتجاه وبأي قوة".</p>
+<ol>
+<li>نحوّل الصورة لـ<span class="en">grayscale</span> (يعني <b>بدون لون</b>).</li>
+<li>نحسب الـ<span class="en">gradient</span> لكل بكسل: مقدار التغير في الإضاءة واتجاهه. التغير الكبير = حافة.</li>
+<li>نقسم الصورة لخلايا <span class="en">cells</span> بحجم <b>16×16 بكسل</b> → 14×14 خلية.</li>
+<li>لكل خلية نبني <span class="en">histogram</span> من <b>9 اتجاهات</b> (<span class="en">orientation bins</span>): كل بكسل يصوّت لاتجاهه بقوة تساوي مقدار الـ<span class="en">gradient</span>.</li>
+<li>نجمع الخلايا في <span class="en">blocks</span> بحجم <b>2×2 خلية</b> متداخلة، ونسوي <span class="en">normalization</span> بطريقة <span class="en">L2-Hys</span> لكل بلوك. هذا يخلي الوصف ما يتأثر بتغير الإضاءة.</li>
+</ol>
+<p><b>حجم المتجه:</b> 13×13 بلوك × 4 خلايا × 9 اتجاهات = <b>6,084 رقم</b> لكل صورة.</p>
+
+<h4>ب) <span class="en">SVM (Support Vector Machine)</span> — المصنّف</h4>
+<p><b>الفكرة:</b> يدوّر على الحد الفاصل بين الفئات اللي يترك أكبر هامش <span class="en">margin</span> ممكن بينها.</p>
+<ul>
+<li><b><span class="en">RBF kernel</span>:</b> يسمح بحدود فاصلة منحنية (غير خطية) بدل خط مستقيم.</li>
+<li><b><code>C = 10</code>:</b> معامل الـ<span class="en">regularization</span>. <code>C</code> كبير = المودل يحاول يصنّف كل نقاط التدريب صح (حد معقد). <code>C</code> صغير = يتسامح مع أخطاء مقابل حد أبسط. اختير بالـ<span class="en">validation</span>.</li>
+<li><b><code>gamma = 'scale'</code>:</b> يحدد مدى تأثير كل نقطة تدريب، ويُحسب تلقائياً من تباين الداتا.</li>
+<li><b><code>class_weight = 'balanced'</code>:</b> يعطي خطأ الفئة القليلة (<span class="en">Healthy</span>) وزن أكبر بنسبة عكسية لعددها، لتعويض الـ<span class="en">imbalance</span>.</li>
+<li><b>في <span class="en">Stage 2</span> (8 فئات):</b> <span class="en">SVM</span> أصلاً ثنائي، فـ<code>scikit-learn</code> يدرب مصنّف لكل زوج من الفئات (<span class="en">one-vs-one</span>: 28 مصنّف) والفئة اللي تاخذ أكثر أصوات تفوز.</li>
+</ul>
+<p><b>اختيار الإعدادات:</b> جربنا <span class="en">grid</span> على الـ<span class="en">validation</span>: <span class="en">linear kernel</span> بقيم <code>C = 0.01, 0.1, 1</code> و<span class="en">RBF</span> بقيم <code>C = 1, 10</code>، والمعيار <span class="en">macro-F1</span>. الفائز في المرحلتين: <span class="en">RBF</span> مع <code>C = 10</code>.</p>
+<p><b>نقطة ضعفه:</b> <span class="en">HOG</span> يشوف الحواف والشكل فقط. أنواع التآكل تختلف غالباً في اللون والملمس، مو في الشكل.</p>
+
+<h3>6.2 الطريقة الثانية: <span class="en">GLCM + Random Forest</span></h3>
+<h4>أ) <span class="en">GLCM (Gray-Level Co-occurrence Matrix)</span> — استخراج الخصائص</h4>
+<p><b>الفكرة:</b> الملمس <span class="en">texture</span> يُوصف بـ"كم مرة تجي درجة رمادي معينة جنب درجة ثانية". سطح ناعم = الجيران متشابهين. سطح خشن متآكل = الجيران مختلفين.</p>
+<ol>
+<li>نحوّل لـ<span class="en">grayscale</span> ونقلل درجات الرمادي من 256 إلى <b>32 مستوى</b> (<span class="en">quantization</span>) حتى تكون المصفوفة صغيرة ومستقرة.</li>
+<li>نبني مصفوفة 32×32: الخانة (i, j) = كم مرة بكسل بدرجة i جاره بدرجة j، عند مسافة واتجاه معينين.</li>
+<li>نكرر لـ<b>3 مسافات</b> (1، 2، 4 بكسل) × <b>4 اتجاهات</b> (0°، 45°، 90°، 135°) = 12 مصفوفة.</li>
+<li>من كل مصفوفة نستخرج <b>7 خصائص</b>.</li>
+</ol>
+<div class="tw"><table>
+<tr><th>الخاصية</th><th>وش تقيس</th></tr>
+<tr><td>Contrast</td><td>شدة الفرق بين البكسل وجاره (عالي = ملمس خشن)</td></tr>
+<tr><td>Dissimilarity</td><td>مثل الـContrast لكن يزيد خطياً بدل تربيعياً</td></tr>
+<tr><td>Homogeneity</td><td>قرب القيم من قطر المصفوفة (عالي = سطح متجانس ناعم)</td></tr>
+<tr><td>Energy</td><td>انتظام الملمس (عالي = نمط متكرر منتظم)</td></tr>
+<tr><td>ASM</td><td><span class="en">Angular Second Moment</span> = مربع الـEnergy</td></tr>
+<tr><td>Correlation</td><td>مدى الارتباط الخطي بين درجات البكسلات المتجاورة</td></tr>
+<tr><td>Entropy</td><td>العشوائية (عالي = ملمس غير منتظم)</td></tr>
+</table></div>
+<p><b>حجم المتجه:</b> 7 خصائص × 3 مسافات × 4 اتجاهات = <b>84 رقم</b> لكل صورة.</p>
+
+<h4>ب) <span class="en">Random Forest</span> — المصنّف</h4>
+<p><b>الفكرة:</b> مجموعة كبيرة من أشجار القرار <span class="en">decision trees</span>، كل شجرة تتدرب على عينة عشوائية من الداتا (<span class="en">bootstrap</span>) وعلى مجموعة عشوائية من الخصائص عند كل تفرع. التصنيف النهائي بتصويت الأغلبية. التنوع بين الأشجار يقلل الـ<span class="en">overfitting</span>.</p>
+<ul>
+<li><b><code>n_estimators</code></b> (عدد الأشجار): جربنا 100 و 200.</li>
+<li><b><code>min_samples_leaf</code></b> (أقل عدد عينات في الورقة): جربنا 1 و 2. قيمة أكبر = أشجار أبسط.</li>
+<li><b><code>class_weight = 'balanced'</code></b> لتعويض الـ<span class="en">imbalance</span>.</li>
+<li>الاختيار بـ<span class="en">validation macro-F1</span>. الفائز: <span class="en">Stage 1</span> = 200 شجرة و <code>leaf=2</code>، <span class="en">Stage 2</span> = 100 شجرة و <code>leaf=2</code>.</li>
+</ul>
+
+<h3>6.3 الامتداد: <span class="en">Colour-Texture + Random Forest</span></h3>
+<p>لأن <span class="en">HOG</span> و<span class="en">GLCM</span> كلاهما يشتغل على <span class="en">grayscale</span>، أضفنا 92 خاصية جديدة فوق الـ84 حق <span class="en">GLCM</span> (المجموع <b>176</b>):</p>
+<ul>
+<li><b><span class="en">HSV histograms</span> (64 رقم):</b> نحوّل الصورة لفضاء <span class="en">HSV</span> ونحسب توزيع <span class="en">Hue</span> (نوع اللون، 32 خانة) و<span class="en">Saturation</span> (تشبع، 16) و<span class="en">Value</span> (سطوع، 16). لون الصدأ (برتقالي/بني) معلومة قوية.</li>
+<li><b><span class="en">LBP (Local Binary Patterns)</span> (28 رقم):</b> لكل بكسل نقارنه بجيرانه على دائرة: الجار أفتح = 1، أغمق = 0، فيطلع رقم ثنائي يوصف النمط المحلي. ثم <span class="en">histogram</span> لهذي الأنماط. استخدمنا مقياسين: 8 جيران بنصف قطر 1 (10 خانات) و16 جار بنصف قطر 2 (18 خانة)، بطريقة <span class="en">uniform</span>.</li>
+</ul>
+<p>نفس الـ<span class="en">Random Forest</span> ونفس الـ<span class="en">grid</span>. الهدف: اختبار فرضية "اللون يساعد في تمييز نوع التآكل".</p>
+
+<h3>6.4 الطريقة الثالثة: <span class="en">Custom CNN</span> (من الصفر)</h3>
+<h4>مكونات الـ<span class="en">CNN</span> باختصار</h4>
+<div class="tw"><table>
+<tr><th>المكون</th><th>دوره</th></tr>
+<tr><td>Convolution layer</td><td>فلاتر صغيرة (3×3) تمر على الصورة وتكتشف أنماط. الطبقات الأولى تتعلم حواف وألوان، والأعمق تتعلم أنماط مركبة. الأوزان تُتعلم بالتدريب.</td></tr>
+<tr><td>ReLU</td><td><span class="en">activation function</span>: تحوّل السالب لصفر. تضيف اللاخطية اللي تخلي الشبكة تتعلم علاقات معقدة.</td></tr>
+<tr><td>Max pooling</td><td>يصغّر الخريطة للنصف بأخذ أكبر قيمة في كل 2×2. يقلل الحساب ويعطي مقاومة للإزاحات الصغيرة.</td></tr>
+<tr><td>Batch normalization</td><td>يوحّد توزيع مخرجات الطبقة داخل كل <span class="en">batch</span>. يسرّع ويثبّت التدريب.</td></tr>
+<tr><td>Global average pooling</td><td>يحوّل كل خريطة خصائص لرقم واحد (متوسطها). بديل خفيف عن <span class="en">Flatten</span> ويقلل الـ<span class="en">parameters</span> كثير.</td></tr>
+<tr><td>Dense layer</td><td>طبقة <span class="en">fully connected</span> تجمع الخصائص لاتخاذ القرار.</td></tr>
+<tr><td>Dropout</td><td>يطفّي نسبة عشوائية من الـ<span class="en">neurons</span> أثناء التدريب فقط. يمنع الاعتماد على <span class="en">neurons</span> معينة = يقلل الـ<span class="en">overfitting</span>.</td></tr>
+<tr><td>Sigmoid</td><td>مخرج <span class="en">Stage 1</span>: رقم واحد بين 0 و 1 = احتمال <span class="en">Corroded</span>.</td></tr>
+<tr><td>Softmax</td><td>مخرج <span class="en">Stage 2</span>: 8 احتمالات مجموعها 1، واحد لكل نوع تآكل.</td></tr>
+</table></div>
+
+<h4>أ) <span class="en">Baseline CNN</span> للمرحلة الأولى (من <span class="en">Part 5</span>، لم يُعاد تدريبه)</h4>
+<pre>Input 224x224x3
+Conv 3x3, 32 filters, ReLU  -> MaxPool
+Conv 3x3, 64 filters, ReLU  -> MaxPool
+Conv 3x3, 128 filters, ReLU -> MaxPool
+Conv 3x3, 128 filters, ReLU
+GlobalAveragePooling
+Dense 64, ReLU -> Dropout 0.4
+Dense 1, Sigmoid                      (249,153 parameters)</pre>
+<ul>
+<li><b><span class="en">Loss</span>:</b> <span class="en">binary cross-entropy</span> (المناسبة للتصنيف الثنائي مع <span class="en">sigmoid</span>).</li>
+<li><b><span class="en">Optimizer</span>:</b> <span class="en">Adam</span> بـ<span class="en">learning rate = 0.001</span>.</li>
+<li><b><span class="en">Batch size</span>:</b> 32.</li>
+<li><b><span class="en">Class weights</span>:</b> 4.50 لـ<span class="en">Healthy</span> و 0.56 لـ<span class="en">Corroded</span> (المعادلة: <code>N / (2 × count)</code>). يعني خطأ في صورة <span class="en">Healthy</span> يُحسب 8 مرات أكثر.</li>
+<li><b><span class="en">Callbacks</span>:</b> <code>ReduceLROnPlateau</code> (ينصّف الـ<span class="en">LR</span> إذا الـ<span class="en">val loss</span> ما تحسن لـ2 <span class="en">epochs</span>)، <code>EarlyStopping</code> (يوقف بعد 5 <span class="en">epochs</span> بدون تحسن)، <code>ModelCheckpoint</code> (يحفظ أفضل <span class="en">epoch</span>).</li>
+<li>توقف بعد 16 <span class="en">epoch</span> وحُفظت أوزان <span class="en">epoch 11</span> (أقل <span class="en">val loss = 0.090</span>).</li>
+</ul>
+
+<h4>ب) <span class="en">Deeper CNN</span> للمرحلة الثانية (جديد)</h4>
+<pre>Input 224x224x3
+RandomFlip (horizontal + vertical)            [training only]
+Conv 3x3, 32, stride 2 + BN + ReLU            (stem)
+SeparableConv 64  + BN + ReLU -> MaxPool
+SeparableConv 128 + BN + ReLU -> MaxPool
+SeparableConv 256 + BN + ReLU (x2) -> MaxPool
+SeparableConv 384 + BN + ReLU (x2) -> MaxPool
+GlobalAveragePooling -> Dropout 0.3
+Dense 128, ReLU -> Dropout 0.4
+Dense 8, Softmax                              (421,576 parameters)</pre>
+<ul>
+<li><b>أعمق من الـ<span class="en">baseline</span>:</b> 7 طبقات <span class="en">convolution</span> بدل 4، لأن تمييز 8 أنواع أصعب من سليم/متآكل.</li>
+<li><b><span class="en">Depthwise-separable convolution</span>:</b> تقسم الـ<span class="en">convolution</span> العادية لخطوتين: <span class="en">depthwise</span> (فلتر 3×3 لكل قناة لحالها) ثم <span class="en">pointwise</span> (1×1 يخلط القنوات). نفس الدور تقريباً بعدد <span class="en">parameters</span> وحساب أقل بكثير. استخدمناها لأن التدريب كان على <span class="en">CPU</span>.</li>
+<li><b><span class="en">Loss</span>:</b> <span class="en">sparse categorical cross-entropy</span> (للتصنيف متعدد الفئات لما الـ<span class="en">labels</span> أرقام صحيحة 0–7).</li>
+<li><b>بدون <span class="en">class weights</span>:</b> لأن الفئات الثمان متوازنة.</li>
+<li><span class="en">Adam 0.001</span>، <code>ReduceLROnPlateau</code> (صبر 3)، <code>EarlyStopping</code> (صبر 7)، حد أقصى 40 <span class="en">epoch</span>.</li>
+<li>{{CNN2_INFO}}</li>
+</ul>
+
+<h3>6.5 الطريقة الرابعة: <span class="en">Transfer Learning</span> بـ<span class="en">ResNet50</span></h3>
+<h4>الفكرة</h4>
+<p><span class="en">ResNet50</span> شبكة من 50 طبقة مدرّبة مسبقاً على <span class="en">ImageNet</span> (1.2 مليون صورة، 1000 فئة). طبقاتها تعلمت خصائص بصرية عامة (حواف، ألوان، ملامس، أشكال) تنفع لأي مهمة. بدل ما ندرب شبكة عميقة من الصفر على 6 آلاف صورة فقط (وهذا قليل)، ناخذ هذي المعرفة الجاهزة ونكيّفها.</p>
+<p><b>ليش <span class="en">"Res"</span>؟</b> فيها <span class="en">residual (skip) connections</span>: مخرج البلوك = مدخله + اللي تعلمه. هذا يحل مشكلة <span class="en">vanishing gradient</span> ويسمح بتدريب شبكات عميقة جداً.</p>
+<p><b><span class="en">Preprocessing</span> خاص:</b> نستخدم <code>resnet50.preprocess_input</code> (تحويل لـ<span class="en">BGR</span> وطرح متوسط <span class="en">ImageNet</span>) لأن الشبكة تدربت بهذا الشكل، بدل القسمة على 255.</p>
+
+<h4><span class="en">Phase 1: Feature extraction</span> (الـ<span class="en">backbone</span> مجمّد)</h4>
+<ul>
+<li>كل طبقات <span class="en">ResNet50</span> مجمّدة (<code>trainable = False</code>): أوزانها ما تتغير.</li>
+<li>نشيل طبقة التصنيف الأصلية (1000 فئة) وناخذ مخرج <span class="en">Global Average Pooling</span> = <b>2,048 رقم</b> لكل صورة.</li>
+<li>ندرب <span class="en">head</span> جديد فقط: <code>Dropout 0.3 → Dense 256 (ReLU) → Dropout 0.4 → Output</code> (<span class="en">sigmoid</span> للمرحلة الأولى، <span class="en">softmax</span> بـ8 للثانية).</li>
+<li><span class="en">Adam 0.001</span>، حتى 60 <span class="en">epoch</span> مع <code>EarlyStopping</code> (صبر 8).</li>
+</ul>
+<h4><span class="en">Phase 2: Fine-tuning</span></h4>
+<ul>
+<li>نفك تجميد آخر مرحلة في الشبكة (<span class="en">conv5_x</span>: 3 <span class="en">bottleneck blocks</span> = 9 طبقات <span class="en">conv</span>) وندربها مع الـ<span class="en">head</span>.</li>
+<li><b><span class="en">Learning rate</span> صغير جداً = 0.00001</b> (أصغر 100 مرة): حتى نعدّل الأوزان الجاهزة تعديل خفيف وما نخرب اللي تعلمته.</li>
+<li><b>طبقات <span class="en">BatchNorm</span> تبقى في <span class="en">inference mode</span>:</b> إحصائياتها المحفوظة من <span class="en">ImageNet</span> ما تتحدث، وهذي الممارسة القياسية في الـ<span class="en">fine-tuning</span>.</li>
+<li>حتى 8 <span class="en">epochs</span> مع <code>EarlyStopping</code> (صبر 3).</li>
+<li><b>ليش الطبقات الأخيرة فقط؟</b> الطبقات الأولى تتعلم خصائص عامة (تنفع كما هي)، والأخيرة تتعلم خصائص خاصة بـ<span class="en">ImageNet</span> (قطط، سيارات) فهي اللي تحتاج تكييف.</li>
+</ul>
+<div class="box"><b>حيلة الـ<span class="en">caching</span>:</b> لأن الطبقات من <span class="en">conv1</span> إلى <span class="en">conv4</span> مجمّدة دايماً، مخرجها لكل صورة ثابت ما يتغير. فحسبناه <b>مرة واحدة</b> لكل صورة وخزّناه على القرص (14×14×1024 لكل صورة)، ثم دربنا <span class="en">conv5</span> والـ<span class="en">head</span> على هذا المخزّن. رياضياً هذا <b>مطابق تماماً</b> لتشغيل الشبكة كاملة مع تجميد تلك الطبقات، لكنه أسرع بعدة مرات وخلّى الـ<span class="en">fine-tuning</span> ممكن بدون <span class="en">GPU</span>.</div>
+
+<h3>6.6 تجربة إضافية: شبكات أحدث + دمج الخصائص + <span class="en">TTA</span></h3>
+<p>لأن دقة المرحلة الثانية توقفت عند حوالي 74%، جربنا ثلاث أفكار لرفعها، وكل الاختيارات تمت على الـ<span class="en">validation</span> فقط:</p>
+<ul>
+<li><b><span class="en">Backbones</span> أحدث:</b> <span class="en">ConvNeXt-Tiny</span> (768 خاصية) و<span class="en">EfficientNetV2-S</span> (1,280 خاصية)، بنفس طريقة <span class="en">Phase 1</span>: الشبكة مجمّدة وندرب <span class="en">head</span> فقط.</li>
+<li><b>دمج الخصائص (<span class="en">feature fusion</span>):</b> نلصق خصائص الشبكات الثلاث في متجه واحد (2,048 + 768 + 1,280 = 4,096) ونوحّد مقياسها (<span class="en">standardization</span> بإحصائيات الـ<span class="en">train</span>) ثم ندرب <span class="en">head</span> واحد عليها. الفكرة: كل شبكة تشوف الصورة بطريقة مختلفة فتكمل بعض.</li>
+<li><b><span class="en">Test-Time Augmentation (TTA)</span>:</b> وقت التوقع نمرر الصورة الأصلية + نسختها المقلوبة أفقياً + المقلوبة عمودياً، وناخذ متوسط الاحتمالات الثلاثة. يقلل تأثير اتجاه الصورة على القرار.</li>
+</ul>
+{{T_BB}}
+<p>اختير بالـ<span class="en">validation</span>: دمج الشبكات الثلاث مع <span class="en">TTA</span>، وأضيف للتقييم باسم <span class="en">"Fusion of 3 backbones + TTA"</span>.</p>
+
+<!-- ============================================================ -->
+<h2 id="s7">7. الـTwo-Stage Pipeline</h2>
+<pre>image -> preprocessing -> Stage 1 model -> Healthy?  -> stop, output "Healthy"
+                                         -> Corroded? -> Stage 2 model -> corrosion type (1 of 8)</pre>
+<p>النتيجة النهائية تصنيف من <b>9 فئات</b>. نقطتان مهمتان:</p>
+<ul>
+<li><b>الخطأ يتراكم:</b> لو <span class="en">Stage 1</span> قال <span class="en">Healthy</span> على صورة متآكلة، <span class="en">Stage 2</span> ما يشوفها أبداً والخطأ ما يتصلح. ولو قال <span class="en">Corroded</span> على صورة سليمة، <span class="en">Stage 2</span> مجبور يعطيها نوع تآكل وهذا خطأ أكيد.</li>
+<li><b>ليش مرحلتين بدل مودل واحد بـ9 فئات؟</b> لأن السؤالين مختلفين في الصعوبة والأهمية. الكشف (سليم/متآكل) هو قرار الأمان الأهم ونقدر نضبط حساسيته لحاله بالـ<span class="en">threshold</span>، وتحديد النوع مهمة أدق تحتاج مودل متخصص يتدرب على المتآكل فقط.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s8">8. الـEvaluation: كل مقياس وش معناه وليش استخدمناه</h2>
+
+<h3>8.1 الـ<span class="en">Confusion matrix</span></h3>
+<p>جدول: الصفوف = الفئة الحقيقية، الأعمدة = الفئة المتوقعة. القطر = الصح. في <span class="en">Stage 1</span>:</p>
+<div class="tw"><table>
+<tr><th></th><th>توقّع Healthy</th><th>توقّع Corroded</th></tr>
+<tr><td>حقيقي Healthy</td><td>صح</td><td>إنذار كاذب (سليم قيل عنه متآكل) → فحص زائد ومكلف</td></tr>
+<tr><td>حقيقي Corroded</td><td>تآكل فائت (الأخطر) → خطر على السلامة</td><td>صح</td></tr>
+</table></div>
+
+<h3>8.2 المقاييس</h3>
+<div class="tw"><table>
+<tr><th>المقياس</th><th>المعادلة</th><th>المعنى</th></tr>
+<tr><td>Accuracy</td><td><span class="en">correct / total</span></td><td>نسبة الصح من الكل. <b>مضلل مع الـimbalance</b>.</td></tr>
+<tr><td>Precision</td><td><span class="en">TP / (TP + FP)</span></td><td>من كل اللي قال عنهم المودل "فئة X"، كم فعلاً X؟</td></tr>
+<tr><td>Recall</td><td><span class="en">TP / (TP + FN)</span></td><td>من كل اللي هم فعلاً X، كم اكتشف المودل؟</td></tr>
+<tr><td>F1-score</td><td><span class="en">2·P·R / (P + R)</span></td><td>المتوسط التوافقي للاثنين: يكون عالي فقط إذا الاثنين عاليين.</td></tr>
+<tr><td>Weighted average</td><td>متوسط الفئات موزون بعدد صور كل فئة</td><td>يعكس الأداء العام، لكن الفئة الكبيرة تسيطر عليه.</td></tr>
+<tr><td>Macro average</td><td>متوسط الفئات بالتساوي</td><td>كل فئة لها نفس الوزن مهما كان حجمها. <b>يكشف ضعف الفئة القليلة</b>.</td></tr>
+<tr><td>Balanced accuracy</td><td>متوسط الـrecall للفئات</td><td>الـaccuracy العادلة مع الـimbalance.</td></tr>
+<tr><td>ROC-AUC</td><td>المساحة تحت منحنى ROC</td><td>جودة ترتيب المودل للصور بغض النظر عن الـthreshold. 0.5 = عشوائي، 1 = مثالي.</td></tr>
+</table></div>
+<div class="warn"><b>ليش الـ<span class="en">accuracy</span> لحالها ما تكفي في <span class="en">Stage 1</span>؟</b> مودل غبي يقول <span class="en">"Corroded"</span> على كل صورة يحصل <b>88.9%</b> <span class="en">accuracy</span> (1,199 من 1,349) وهو ما اكتشف ولا صورة سليمة. لهذا نركز على <b><span class="en">Healthy recall</span></b> و<span class="en">macro-F1</span> و<span class="en">balanced accuracy</span>. مثال حقيقي من نتائجنا: <span class="en">HOG+SVM</span> دقته 94% لكنه يكتشف 56% فقط من الصور السليمة.</div>
+<p><b>في <span class="en">Stage 2</span>:</b> الفئات متوازنة، فالـ<span class="en">accuracy</span> معبّرة. خط الأساس = التخمين العشوائي = 1/8 = <b>12.5%</b>.</p>
+
+<h3>8.3 الـ<span class="en">Confidence interval</span></h3>
+<p>الدقة محسوبة على 1,349 صورة فقط، فهي تقدير فيه هامش خطأ. حسبنا <span class="en">95% Wilson interval</span>: مدى نثق 95% أن الدقة الحقيقية داخله. لو مجالا طريقتين متداخلين كثير، الفرق بينهم ممكن يكون صدفة.</p>
+
+<h3>8.4 الـ<span class="en">Threshold tuning</span> (المرحلة الأولى)</h3>
+<p>المودل يطلّع احتمال <span class="en">P(Corroded)</span>. الافتراضي: إذا ≥ 0.5 نقول <span class="en">Corroded</span>. لكن 0.5 مو بالضرورة الأفضل مع الـ<span class="en">imbalance</span>. جربنا مئات القيم على الـ<b><span class="en">validation</span></b> واخترنا اللي تعطي أعلى <span class="en">macro-F1</span>، ثم طبقناها <b>مرة واحدة</b> على الـ<span class="en">test</span>. رفع الـ<span class="en">threshold</span> = المودل يحتاج ثقة أعلى ليقول "متآكل" = يكتشف صور سليمة أكثر، مقابل تفويت بعض التآكل.</p>
+
+<h3>8.5 اختبار <span class="en">McNemar</span></h3>
+<p><b>السؤال:</b> لما مودل A دقته أعلى من B، هل الفرق حقيقي أو صدفة؟</p>
+<p><b>الطريقة:</b> لأن المودلين اختُبرا على نفس الصور، نقارنهم صورة بصورة. نهمل الصور اللي الاثنين صح فيها أو الاثنين غلط، ونعد فقط:</p>
+<ul>
+<li><code>b</code> = صور A صح فيها و B غلط.</li>
+<li><code>c</code> = صور A غلط فيها و B صح.</li>
+</ul>
+<p>لو المودلين بنفس المستوى، نتوقع <code>b ≈ c</code>. استخدمنا النسخة الدقيقة (<span class="en">exact binomial test</span>): تحسب احتمال أن يطلع فرق بهذا الحجم بالصدفة = الـ<span class="en">p-value</span>. إذا <code>p &lt; 0.05</code> الفرق <b>دال إحصائياً</b>.</p>
+<p><b><span class="en">Holm correction</span>:</b> لأننا نسوي اختبارات كثيرة (كل زوج من الطرق)، احتمال أن يطلع واحد "دال" بالصدفة يزيد. تصحيح <span class="en">Holm</span> يشدد الشرط للتعويض عن هذا.</p>
+
+<h3>8.6 تقييم الـ<span class="en">End-to-end</span></h3>
+<p>نشغّل الـ<span class="en">pipeline</span> كامل على كل صور الاختبار (1,349) ونقيس التصنيف على 9 فئات. ونفصل الأخطاء: كم خطأ من <span class="en">Stage 1</span> وكم من <span class="en">Stage 2</span>.</p>
+
+<!-- ============================================================ -->
+<h2 id="s9">9. النتائج الفعلية وقراءتها</h2>
+<p>كل الأرقام على الـ<span class="en">test set</span>.</p>
+
+<h3>9.1 <span class="en">Stage 1</span>: سليم أو متآكل (1,349 صورة: 150 سليمة و 1,199 متآكلة)</h3>
+{{T_S1}}
+{{FIG:stage1_confusion|Confusion matrices للمرحلة الأولى}}
+
+<h3>9.2 <span class="en">Stage 1</span>: نتيجة ضبط الـ<span class="en">threshold</span></h3>
+{{T_THR}}
+{{FIG:roc_threshold|يسار: منحنيات ROC. يمين: الـmacro-F1 على الـvalidation عند كل threshold}}
+
+<h3>9.3 <span class="en">Stage 2</span>: نوع التآكل (1,199 صورة متآكلة، 8 فئات)</h3>
+{{T_S2}}
+<h4>الـ<span class="en">Recall</span> لكل نوع تآكل (%)</h4>
+{{T_REC}}
+{{FIG:stage2_per_class_recall|Recall لكل نوع تآكل ولكل طريقة}}
+{{FIG:stage2_confusion|Confusion matrices للمرحلة الثانية}}
+
+<h3>9.4 الـ<span class="en">End-to-end</span> (9 فئات، 1,349 صورة)</h3>
+{{T_E2E}}
+{{FIG:end_to_end_confusion|Confusion matrix لأفضل pipeline على الفئات التسع}}
+{{FIG:comparison|مقارنة عامة بين الطرق}}
+
+<h3>9.5 اختبارات <span class="en">McNemar</span></h3>
+{{T_MC}}
+
+<h3>9.6 منحنيات التدريب</h3>
+{{FIG:training_curves|منحنيات الـaccuracy والـloss للتدريب والـvalidation}}
+
+<h3>9.7 أمثلة على الأخطاء</h3>
+{{FIG:error_examples|أمثلة من أخطاء أفضل pipeline}}
+
+<h3>9.8 قراءة النتائج</h3>
+{{READING}}
+
+<!-- ============================================================ -->
+<h2 id="s10">10. المشاكل التي واجهتني وكيف حُلّت</h2>
+<div class="tw"><table>
+<tr><th>المشكلة</th><th>الحل</th></tr>
+<tr><td>الصور المعالجة وخصائص الـtrain/val من <span class="en">Part 2</span> غير موجودة (فقط <code>features_test.npz</code> و <code>processed_images.csv</code>)</td><td>أعدت توليدها بنفس دوال <span class="en">Part 2</span> بدون تغيير. الـ<span class="en">augmentation</span> العشوائي كان يستخدم <code>seed = 42 + idx</code>، ووجدت أن الـ<code>idx</code> محفوظ في اسم الملف (<code>train/…/00001.png</code>) فاستخرجته منه. <b>التحقق:</b> خصائص الـ<span class="en">test</span> المُعاد توليدها تطابق الملف الأصلي بالبت (فرق = 0).</td></tr>
+<tr><td>نتيجة <span class="en">GLCM + RF</span> طلعت 0.9036 بدل 0.9281 اللي في تقرير التقدم</td><td>السبب إصدار <code>scikit-learn</code>: الإصدار الجديد (1.9) يبني الـ<span class="en">Random Forest</span> بشكل مختلف قليلاً. بالإصدار 1.6.1 (إصدار <span class="en">Colab</span> وقت التقرير) النتيجة تطابق التقرير تماماً. فثبّتّ الإصدار 1.6.1 للـ<span class="en">Random Forest</span>.</td></tr>
+<tr><td>التأكد أن النماذج القديمة ما تغيرت</td><td><span class="en">HOG+SVM</span> أعطى نفس أرقام التقرير (0.9400 / 0.2861). والـ<span class="en">baseline CNN</span> المحفوظ أعطى نفس توقعات <span class="en">Part 5</span> بالضبط (أقصى فرق في الاحتمالات 5×10⁻⁷).</td></tr>
+<tr><td>لا يوجد <span class="en">GPU</span>، والتدريب على <span class="en">CPU</span> بطيء جداً</td><td>(1) حيلة الـ<span class="en">caching</span> في <span class="en">ResNet50</span>. (2) استخدام <span class="en">separable convolutions</span> في <span class="en">CNN</span> المرحلة الثانية.</td></tr>
+<tr><td>الذاكرة امتلأت (<span class="en">out of memory</span>) لما شغّلت مهمتين معاً</td><td>شغّلت المهام بالتتابع، وقللت الـ<span class="en">batch</span> في استخراج الخصائص، واستخدمت <span class="en">memory-mapped files</span> بدل تحميل كل شي في الـ<span class="en">RAM</span>.</td></tr>
+<tr><td>الوصول لـ<span class="en">Kaggle</span> كان محجوب في بيئة التشغيل</td><td>أُضيف <code>www.kaggle.com</code> و <code>api.kaggle.com</code> للمواقع المسموحة.</td></tr>
+</table></div>
+
+<!-- ============================================================ -->
+<h2 id="s11">11. ملفات الكود: كل ملف وش يسوي</h2>
+<div class="tw"><table>
+<tr><th>الملف</th><th>وش يسوي</th></tr>
+<tr><td><code>common.py</code></td><td>الإعدادات المشتركة (<code>SEED=42</code>، المسارات، أسماء الفئات) + دوال <span class="en">Part 2</span> بدون تغيير (<code>preprocess</code>, <code>augment</code>, <code>hog_features</code>, <code>glcm_features</code>) + دالة <code>color_lbp_features</code> الجديدة + دوال تحميل الصور والـ<span class="en">labels</span>.</td></tr>
+<tr><td><code>01_regenerate.py</code></td><td>يقرأ <code>processed_images.csv</code>، يعيد توليد الصور المعالجة والـ<span class="en">augmented</span>، يحسب <span class="en">HOG</span> و<span class="en">GLCM</span> و<span class="en">colour+LBP</span> لكل الأجزاء، ويتحقق من المطابقة مع <code>features_test.npz</code>.</td></tr>
+<tr><td><code>02_classical.py</code></td><td>يدرب <span class="en">HOG+SVM</span> و<span class="en">GLCM+RF</span> و<span class="en">Colour-Texture+RF</span> للمرحلتين ويحفظ توقعات كل صورة.</td></tr>
+<tr><td><code>03_cnn.py</code></td><td>يحمّل <span class="en">baseline CNN</span> من <span class="en">Part 5</span> ويطلّع توقعاته على <span class="en">val/test</span>، ويدرب الـ<span class="en">Deeper CNN</span> للمرحلة الثانية.</td></tr>
+<tr><td><code>04_transfer.py</code></td><td><span class="en">ResNet50</span>: الـ<span class="en">caching</span>، ثم <span class="en">Phase 1</span> و<span class="en">Phase 2</span> للمرحلتين.</td></tr>
+<tr><td><code>07_backbones.py</code></td><td>استخراج خصائص <span class="en">ConvNeXt</span> و<span class="en">EfficientNetV2</span>، تدريب <span class="en">head</span> لكل شبكة ولكل دمج، حساب الـ<span class="en">TTA</span>، واختيار الأفضل بالـ<span class="en">validation</span>.</td></tr>
+<tr><td><code>05_evaluate.py</code></td><td>كل التقييم: المقاييس، <span class="en">threshold tuning</span>، <span class="en">McNemar</span>، <span class="en">end-to-end</span>، وكل الأشكال.</td></tr>
+<tr><td><code>06_data_figures.py</code></td><td>أشكال الداتا (أمثلة الفئات، التوزيع، خطوات المعالجة، الـ<span class="en">augmentation</span>).</td></tr>
+<tr><td><code>build_notebook.py</code></td><td>يولّد نوتبوك <span class="en">Colab</span> من السكربتات.</td></tr>
+</table></div>
+<p><b>التصميم:</b> كل مودل يحفظ توقعاته لكل صورة اختبار في ملف <code>outputs/preds/&lt;method&gt;.npz</code> بنفس الصيغة، وسكربت التقييم يقرأها كلها. هذا يضمن أن كل الطرق تُقيَّم بنفس الكود بالضبط.</p>
+<p><b>المكتبات:</b> <code>OpenCV</code> (معالجة الصور)، <code>scikit-image</code> (<span class="en">HOG, GLCM, LBP</span>)، <code>scikit-learn</code> (<span class="en">SVM, Random Forest</span>، المقاييس)، <code>TensorFlow/Keras</code> (<span class="en">CNN, ResNet50</span>)، <code>SciPy</code> (<span class="en">McNemar</span>)، <code>Matplotlib</code> (الأشكال).</p>
+
+<!-- ============================================================ -->
+<h2 id="s12">12. حدود المشروع (Limitations)</h2>
+<ul>
+<li><b>طبيعة الداتا:</b> بالفحص البصري، كثير من الصور ليست صور حقيقية تحت الماء (بعضها يبدو مولّد <span class="en">synthetic</span> أو مصوّر فوق الماء). فالنتائج لا تضمن نفس الأداء على صور <span class="en">ROV</span> حقيقية.</li>
+<li><b>مصدر واحد:</b> الـ<span class="en">train</span> والـ<span class="en">test</span> من نفس الداتاست، فما اختبرنا التعميم على داتا من مصدر مختلف.</li>
+<li><b>تشغيل واحد لكل مودل</b> (<code>seed = 42</code>): ما قسنا تباين النتائج بين تشغيلات مختلفة.</li>
+<li><b>التدريب على <span class="en">CPU</span>:</b> حدّ من حجم الـ<span class="en">CNN</span> ومن عدد تجارب الـ<span class="en">hyperparameters</span> والـ<span class="en">fine-tuning</span>.</li>
+<li><b>الـ<span class="en">augmentation</span> ثابت:</b> نسخة واحدة محفوظة لكل صورة، وليس <span class="en">augmentation</span> متجدد كل <span class="en">epoch</span>.</li>
+<li><b>تصنيف على مستوى الصورة:</b> النظام يقول "فيه تآكل" لكنه لا يحدد مكانه في الصورة (<span class="en">no localization/segmentation</span>).</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="s13">13. أسئلة متوقعة وإجاباتها</h2>
+{{QA}}
+
+</main>
+</body>
+</html>

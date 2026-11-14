@@ -1,0 +1,41 @@
+<p class="q">س: ليش قسمتوا المشكلة لمرحلتين بدل مودل واحد بتسع فئات؟</p>
+<p>لأن السؤالين مختلفين: الكشف (سليم/متآكل) هو قرار السلامة الأهم ونقدر نضبط حساسيته لحاله بالـ<span class="en">threshold</span>، وتحديد النوع مهمة أدق يتخصص فيها مودل يتدرب على الصور المتآكلة فقط. وقيّمنا الـ<span class="en">pipeline</span> كامل على 9 فئات حتى نشوف الأداء الفعلي بعد تراكم الأخطاء.</p>
+
+<p class="q">س: كيف تعاملتوا مع الـ<span class="en">class imbalance</span> في المرحلة الأولى؟</p>
+<p>بثلاث طرق: (1) <span class="en">class weights</span> أثناء التدريب (خطأ الصورة السليمة يُحسب 8 مرات أكثر)، (2) مقاييس ما تنخدع بالـ<span class="en">imbalance</span>: <span class="en">Healthy recall, macro-F1, balanced accuracy, ROC-AUC</span>، (3) ضبط الـ<span class="en">decision threshold</span> على الـ<span class="en">validation</span>.</p>
+
+<p class="q">س: ليش ما استخدمتوا <span class="en">oversampling</span> أو <span class="en">SMOTE</span>؟</p>
+<p>الـ<span class="en">class weights</span> تحقق نفس الهدف رياضياً (زيادة وزن الفئة القليلة في الـ<span class="en">loss</span>) بدون تكرار صور أو توليد صور صناعية، وهي أبسط وما تزيد وقت التدريب. والـ<span class="en">SMOTE</span> مصمم للخصائص الجدولية وما يناسب الصور الخام.</p>
+
+<p class="q">س: وش الفرق بين الـ<span class="en">validation</span> والـ<span class="en">test</span>؟ وليش ما تكفي واحدة؟</p>
+<p>الـ<span class="en">validation</span> نتخذ عليها القرارات (اختيار <span class="en">hyperparameters</span>، <span class="en">early stopping</span>، <span class="en">threshold</span>). ولأننا اخترنا الأفضل بناءً عليها، نتيجتها صارت متفائلة شوي. الـ<span class="en">test</span> ما دخلت في أي قرار، فهي التقدير الصادق للأداء على صور جديدة.</p>
+
+<p class="q">س: كيف تضمنون ما فيه <span class="en">data leakage</span>؟</p>
+<p>(1) التقسيم تم <b>قبل</b> الـ<span class="en">augmentation</span>، والنسخ المعدّلة كلها داخل الـ<span class="en">train</span>. (2) حذفنا الملفات المتطابقة بالـ<span class="en">MD5</span> قبل التقسيم. (3) الكود فيه <code>assert</code> يتأكد أن ما فيه صورة <span class="en">augmented</span> في <span class="en">val/test</span> وأن كل صورة أصلية في جزء واحد فقط. (4) الـ<span class="en">preprocessing</span> لكل صورة لحالها (ما فيه إحصائيات محسوبة من كل الداتا).</p>
+
+<p class="q">س: ليش <span class="en">HOG</span> ضعيف في المرحلة الثانية؟</p>
+<p>لأنه يوصف اتجاهات الحواف على صورة رمادية. أنواع التآكل تظهر على نفس الأجسام (أنابيب، ألواح) فالحواف متشابهة، والفرق بينها في اللون والملمس الدقيق، وهذي معلومات <span class="en">HOG</span> ما يشوفها. دقته 28.6% مقابل 12.5% للتخمين العشوائي.</p>
+
+<p class="q">س: ليش الـ<span class="en">Transfer Learning</span> أفضل من <span class="en">CNN</span> من الصفر؟</p>
+<p>لأن <span class="en">ResNet50</span> تعلّم خصائص بصرية غنية من 1.2 مليون صورة، وإحنا عندنا حوالي 6 آلاف صورة أصلية فقط. شبكة من الصفر لازم تتعلم كل شي (حتى الحواف) من هالعدد القليل. والـ<span class="en">CNN</span> حقنا صغير (حوالي 0.4 مليون <span class="en">parameter</span>) مقابل 23.5 مليون في <span class="en">ResNet50</span>.</p>
+
+<p class="q">س: ليش الـ<span class="en">fine-tuning</span> ما حسّن النتيجة كثير؟</p>
+<p>لأن الخصائص المجمّدة أصلاً قوية، والداتا صغيرة: لما فكّينا <span class="en">conv5</span> (حوالي 15 مليون <span class="en">parameter</span>) الـ<span class="en">training accuracy</span> ارتفعت بسرعة لكن الـ<span class="en">validation loss</span> ما تحسنت، وهذا <span class="en">overfitting</span>. الـ<span class="en">early stopping</span> أرجع أفضل أوزان. الاستنتاج: مع داتا بهذا الحجم، تدريب الـ<span class="en">head</span> فقط كافٍ تقريباً.</p>
+
+<p class="q">س: وش معنى <span class="en">p-value</span> في اختبار <span class="en">McNemar</span>؟</p>
+<p>احتمال أن نشوف فرق بهذا الحجم (أو أكبر) بين المودلين لو كانوا فعلياً بنفس المستوى. إذا أقل من 0.05 نقول الفرق دال إحصائياً (مو صدفة). وطبقنا تصحيح <span class="en">Holm</span> لأننا سوينا مقارنات كثيرة.</p>
+
+<p class="q">س: ليش <span class="en">McNemar</span> وليس <span class="en">t-test</span>؟</p>
+<p>لأن عندنا <span class="en">test set</span> واحد وتشغيل واحد لكل مودل، والمودلات اختُبرت على نفس الصور (بيانات مزدوجة <span class="en">paired</span>) والنتيجة لكل صورة ثنائية (صح/غلط). هذا بالضبط الوضع اللي صُمم له <span class="en">McNemar</span>. الـ<span class="en">t-test</span> يحتاج عدة تشغيلات أو <span class="en">cross-validation</span>.</p>
+
+<p class="q">س: ليش <span class="en">macro-F1</span> هو معيار اختيار الـ<span class="en">hyperparameters</span>؟</p>
+<p>لأنه يعطي كل فئة نفس الوزن. لو اخترنا بالـ<span class="en">accuracy</span> في المرحلة الأولى، المودل اللي يتجاهل الفئة السليمة بيطلع "أفضل".</p>
+
+<p class="q">س: ليش 224×224؟</p>
+<p>هو حجم الإدخال القياسي لـ<span class="en">ResNet50</span> والشبكات المدرّبة على <span class="en">ImageNet</span>، ووحّدناه لكل الطرق حتى تكون المقارنة عادلة.</p>
+
+<p class="q">س: هل النتائج قابلة لإعادة الإنتاج؟</p>
+<p>نعم: <code>seed = 42</code> في كل مكان، ملف تقسيم واحد ثابت، إصدار <code>scikit-learn</code> مثبّت، والكود يتحقق أن الخصائص المُعاد توليدها تطابق الملف الأصلي. النماذج الكلاسيكية والـ<span class="en">baseline CNN</span> أعطت نفس أرقام تقرير التقدم بالضبط. تدريب الشبكات على <span class="en">GPU</span> ممكن يعطي فروقات صغيرة جداً بسبب عدم حتمية بعض عمليات الـ<span class="en">GPU</span>.</p>
+
+<p class="q">س: وش أهم تحسين ممكن مستقبلاً؟</p>
+<p>(1) اختبار النظام على صور حقيقية تحت الماء من مصدر مختلف. (2) <span class="en">Augmentation</span> متجدد كل <span class="en">epoch</span> وأقوى، لتقليل الـ<span class="en">overfitting</span> في الـ<span class="en">fine-tuning</span>. (3) تجربة شبكات أحدث (<span class="en">EfficientNet, ConvNeXt, ViT</span>). (4) إضافة <span class="en">Grad-CAM</span> لمعرفة وين يطالع المودل. (5) تحديد مكان التآكل (<span class="en">segmentation</span>) بدل تصنيف الصورة كاملة.</p>
